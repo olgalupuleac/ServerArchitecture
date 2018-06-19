@@ -19,7 +19,7 @@ public class ClientManager {
         try {
             ServerSocket serverSocket = new ServerSocket(portNumber);
             Socket client = serverSocket.accept();
-            while (true){
+            for (int it = 0; ; it++){
                 ClientInfoProtocol.ClientInfo clientInfo = ClientInfoProtocol.ClientInfo.parseDelimitedFrom(
                         client.getInputStream());
                 int port = clientInfo.getPort();

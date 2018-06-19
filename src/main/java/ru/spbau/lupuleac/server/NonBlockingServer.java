@@ -123,6 +123,7 @@ public class NonBlockingServer extends Server {
         if (client.bytesOfData != -1) {
             int bytesRead = channel.read(buffer);
             client.bytesProcessed += bytesRead;
+            LOGGER.info("Bytes processed " + client.bytesProcessed + ", bytes of data " + client.bytesOfData);
             if (client.isFull()) {
                 threadPool.submit(() -> {
                     int[] arrayToSort = Utils.getArrayFromBytes(buffer.array());
@@ -181,7 +182,10 @@ public class NonBlockingServer extends Server {
             writingSelector.wakeup();
         }
         LOGGER.info("OK");
-
+        try {
+            readingThread.join();
+            writingThread.join();
+        } catch (InterruptedException ignored){}
     }
 
     private static class Client {
@@ -209,6 +213,7 @@ public class NonBlockingServer extends Server {
         private void setSize() {
             bufferForSize.flip();
             bytesOfData = bufferForSize.getInt();
+            LOGGER.info("Size " + bytesOfData);
             bufferForData = ByteBuffer.allocate(bytesOfData);
             bufferForSize.clear();
         }
@@ -216,6 +221,7 @@ public class NonBlockingServer extends Server {
         private void prepareToReadFromBuffer(byte[] data) {
             bytesProcessed = 0;
             bufferForData.clear();
+            //bufferForData.putInt(data.length);
             bufferForData.put(data);
             bufferForData.flip();
             toBeReadIn.set(false);
