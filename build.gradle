@@ -19,4 +19,8 @@ dependencies {
     compile 'io.grpc:grpc-protobuf:1.+'
     compile "io.grpc:grpc-netty:1.+"
     compile "io.grpc:grpc-testing:1.+"
+
+    // https://mvnrepository.com/artifact/de.dynamicfiles.projects.gradle.plugins/javafx-gradle-plugin
+    compile group: 'de.dynamicfiles.projects.gradle.plugins', name: 'javafx-gradle-plugin', version: '8.5.1'
+
 }
