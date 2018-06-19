@@ -11,10 +11,7 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Iterator;
 import java.util.Set;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
@@ -27,7 +24,8 @@ public class NonBlockingServer extends Server {
 
     private final ConcurrentLinkedQueue<Client> registerToRead = new ConcurrentLinkedQueue<>();
     private final ConcurrentLinkedQueue<Client> registerToWrite = new ConcurrentLinkedQueue<>();
-    private AtomicInteger queriesProcessed = new AtomicInteger(0);
+    private CountDownLatch queriesProcessed;
+    private AtomicInteger queriesReceived = new AtomicInteger(0);
     private ServerSocketChannel socketChannel;
 
 
@@ -35,7 +33,11 @@ public class NonBlockingServer extends Server {
         @Override
         public void run() {
             try {
-                while (queriesProcessed.get() < totalNumOfQueries) {
+                while (!Thread.interrupted()) {
+                    if(readingSelector == null){
+                        continue;
+                    }
+                    //LOGGER.info("In read " + queriesReceived.get());
                     while (!registerToRead.isEmpty()) {
                         Client client = registerToRead.remove();
                         client.channel.register(readingSelector, SelectionKey.OP_READ, client);
@@ -54,7 +56,7 @@ public class NonBlockingServer extends Server {
                         keyIterator.remove();
                     }
                 }
-
+                LOGGER.info("Queries received " + queriesReceived.get() + ", reading thread is over");
             } catch (IOException e) {
                handle(e);
             }
@@ -65,12 +67,16 @@ public class NonBlockingServer extends Server {
         @Override
         public void run() {
             try {
-                while (queriesProcessed.get() < totalNumOfQueries) {
+                while (!Thread.interrupted()) {
+                    if(writingSelector == null){
+                        continue;
+                    }
                     while (!registerToWrite.isEmpty()) {
                         Client client = registerToWrite.remove();
                         client.channel.register(writingSelector, SelectionKey.OP_WRITE, client);
                     }
                     int ready = writingSelector.select();
+                    //LOGGER.info("ready " + ready);
                     if (ready == 0) {
                         continue;
                     }
@@ -79,13 +85,14 @@ public class NonBlockingServer extends Server {
                     while (keyIterator.hasNext()) {
                         SelectionKey key = keyIterator.next();
                         if (key.isWritable()) {
+                            //LOGGER.info("Write to channel");
                             writeToChannel((Client) key.attachment());
                         }
                         keyIterator.remove();
                     }
+
                 }
-                threadPool.shutdownNow();
-                LOGGER.info("Queries processed " + queriesProcessed.get() + ", writing thread is over");
+                LOGGER.info("Queries " + queriesProcessed.getCount() + ", writing thread is over");
             } catch (IOException e) {
                 handle(e);
             }
@@ -100,15 +107,18 @@ public class NonBlockingServer extends Server {
 
     private void writeToChannel(Client client) throws IOException {
         SocketChannel channel = client.channel;
-        if (client.toBeReadIn.get()) {
+        if (client.action.get() != -1) {
+            //LOGGER.info("In write");
             return;
         }
         ByteBuffer buffer = client.bufferForData;
         if (buffer.hasRemaining()) {
             int bytesWritten = channel.write(buffer);
             client.bytesProcessed += bytesWritten;
+            //LOGGER.info("Bytes written " + bytesWritten);
         } else {
-            queriesProcessed.incrementAndGet();
+            queriesProcessed.countDown();
+            LOGGER.info("Queries " + queriesProcessed.getCount());
             timeToProcessQueries.addAndGet(System.currentTimeMillis() - client.start);
             client.prepareToWriteToBuffer();
         }
@@ -116,16 +126,22 @@ public class NonBlockingServer extends Server {
 
     private void readFromChannel(Client client) throws IOException {
         SocketChannel channel = client.channel;
-        if (!client.toBeReadIn.get()) {
+        if (client.action.get() != 1) {
+            //LOGGER.info("In read");
             return;
         }
         ByteBuffer buffer = client.bufferForData;
         if (client.bytesOfData != -1) {
             int bytesRead = channel.read(buffer);
             client.bytesProcessed += bytesRead;
-            LOGGER.info("Bytes processed " + client.bytesProcessed + ", bytes of data " + client.bytesOfData);
+            //LOGGER.info("Bytes read " + bytesRead);
             if (client.isFull()) {
+                queriesReceived.incrementAndGet();
+                LOGGER.info("queries received " + queriesReceived);
+                client.action.set(0);
+                //LOGGER.info("Is full");
                 threadPool.submit(() -> {
+                    LOGGER.info("Submit " + client.id + " iteration " + client.iteration);
                     int[] arrayToSort = Utils.getArrayFromBytes(buffer.array());
                     if (arrayToSort == null) {
                         LOGGER.warning("Parse exception");
@@ -151,11 +167,14 @@ public class NonBlockingServer extends Server {
         super(port, numberOfClients, queriesPerClient);
         socketChannel = ServerSocketChannel.open();
         socketChannel.bind(new InetSocketAddress(portNumber));
+        readingThread.start();
+        writingThread.start();
     }
 
     @Override
     public void start() throws IOException {
-
+        LOGGER.info("Start");
+        queriesProcessed = new CountDownLatch(totalNumOfQueries);
         ThreadFactory namedThreadFactory =
                 new ThreadFactoryBuilder().setNameFormat("my-sad-thread-%d").build();
         threadPool = Executors.newFixedThreadPool(4, namedThreadFactory);
@@ -163,8 +182,6 @@ public class NonBlockingServer extends Server {
         writingThread.setName("writing thread");
         readingSelector = Selector.open();
         writingSelector = Selector.open();
-        readingThread.start();
-        writingThread.start();
         for (int i = 0; i < numberOfClients; i++) {
             if(exception != null){
                 throw exception;
@@ -174,40 +191,51 @@ public class NonBlockingServer extends Server {
                 channel = socketChannel.accept();
             }
             LOGGER.info("Client connected");
-            Client client = new Client(channel);
+            Client client = new Client(channel, i);
             channel.configureBlocking(false);
             registerToRead.add(client);
             readingSelector.wakeup();
             registerToWrite.add(client);
             writingSelector.wakeup();
         }
-        LOGGER.info("OK");
         try {
-            readingThread.join();
-            writingThread.join();
-        } catch (InterruptedException ignored){}
+            queriesProcessed.await();
+        } catch (InterruptedException ignored) {
+        }
+        LOGGER.info("OK");
+    }
+
+    public void shutDown(){
+        threadPool.shutdown();
+        readingThread.interrupt();
+        writingThread.interrupt();
     }
 
     private static class Client {
-        private AtomicBoolean toBeReadIn = new AtomicBoolean();
+        //1 - readFromChannel, 0 - process, -1 - writeToChannel
+        private AtomicInteger action = new AtomicInteger(1);
         private volatile int bytesOfData;
         private volatile int bytesProcessed;
         private final SocketChannel channel;
         private ByteBuffer bufferForSize;
         private ByteBuffer bufferForData;
         private long start;
+        private int iteration;
+        private int id;
 
         private boolean isFull() {
             return bytesOfData == bytesProcessed;
         }
 
         private void prepareToWriteToBuffer() {
+            iteration++;
+            LOGGER.info("Reading state " + iteration + " " + id);
             start = System.currentTimeMillis();
             bytesOfData = -1;
             bytesProcessed = 0;
             bufferForSize.clear();
             bufferForData.clear();
-            toBeReadIn.set(true);
+            action.set(1);
         }
 
         private void setSize() {
@@ -215,23 +243,29 @@ public class NonBlockingServer extends Server {
             bytesOfData = bufferForSize.getInt();
             LOGGER.info("Size " + bytesOfData);
             bufferForData = ByteBuffer.allocate(bytesOfData);
+
             bufferForSize.clear();
         }
 
         private void prepareToReadFromBuffer(byte[] data) {
+            LOGGER.info("Writing state " + iteration);
             bytesProcessed = 0;
-            bufferForData.clear();
-            //bufferForData.putInt(data.length);
+            bytesOfData = data.length;
+            //bufferForData.clear();
+            //LOGGER.info("Buffer size " + bufferForData.capacity() + " data size " + bytesOfData);
+            bufferForData = ByteBuffer.allocate(data.length + HEADER_SIZE);
+            bufferForData.putInt(1);
             bufferForData.put(data);
             bufferForData.flip();
-            toBeReadIn.set(false);
+            action.set(-1);
         }
 
-        private Client(SocketChannel channel) {
+        private Client(SocketChannel channel, int i) {
+            id = i;
             this.channel = channel;
             bytesOfData = -1;
-            toBeReadIn.set(true);
             bufferForSize = ByteBuffer.allocate(HEADER_SIZE);
+            action.set(1);
         }
     }
 }

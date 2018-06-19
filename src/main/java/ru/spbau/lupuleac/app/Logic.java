@@ -55,6 +55,9 @@ public class Logic {
             double queryTime = server.getAverageTimeForProcessingQuery();
             testResults.put(getChangingParameter(), new TestResult(sortTime, queryTime, clientTime));
         } while (isTested());
+        if(server instanceof NonBlockingServer){
+            ((NonBlockingServer)server).shutDown();
+        }
         LOGGER.info("All tests");
         return testResults;
     }
