@@ -1,0 +1,9 @@
+syntax = "proto2";
+
+
+option java_package = "ru.spbau.lupuleac.server";
+option java_outer_classname = "ArrayProtocol";
+
+message Array {
+    repeated int32 data = 1 [packed=true];
+}

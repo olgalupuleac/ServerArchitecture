@@ -1,0 +1,14 @@
+syntax = "proto2";
+
+
+option java_package = "ru.spbau.lupuleac.app";
+option java_outer_classname = "ClientInfoProtocol";
+
+message ClientInfo {
+    required int32 port = 1;
+    required int32 number_of_clients = 2;
+    required int32 queries_per_client = 3;
+    required int32 elements_in_array = 4;
+    required int32 time_interval = 5;
+    required string host = 6;
+}
