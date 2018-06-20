@@ -53,7 +53,13 @@ public class Utils {
         for (int x : array) {
             builder.addData(x);
         }
-        return builder.build().toByteArray();
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        try {
+            builder.build().writeDelimitedTo(byteArrayOutputStream);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return byteArrayOutputStream.toByteArray();
     }
 
     public static void sort(int[] a) {

@@ -156,9 +156,9 @@ public class NonBlockingServer extends Server {
         }
         try {
             queriesProcessed.await();
+            LOGGER.info("OK");
         } catch (InterruptedException ignored) {
         }
-        LOGGER.info("OK");
     }
 
     public void shutDown(){
