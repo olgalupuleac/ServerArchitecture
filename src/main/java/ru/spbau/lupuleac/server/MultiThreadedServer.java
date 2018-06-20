@@ -17,13 +17,14 @@ public class MultiThreadedServer extends Server {
     private List<Thread> threads = new ArrayList<>();
 
 
-    public MultiThreadedServer(int port, int numberOfClients, int queriesPerClient) throws IOException {
-        super(port, numberOfClients, queriesPerClient);
+    public MultiThreadedServer(int port) throws IOException {
+        super(port);
         serverSocket = new ServerSocket(portNumber);
     }
 
     @Override
-    public void start() throws IOException {
+    public void start(int numberOfClients, int queriesPerClient) throws IOException {
+        super.start(numberOfClients, queriesPerClient);
         for (int i = 0; i < numberOfClients; i++) {
             Socket clientSocket = serverSocket.accept();
             LOGGER.info("Connection created");

@@ -40,9 +40,9 @@ public class ClientManager {
                     t.start();
                 }
                 double sum = 0;
-                for(FutureTask task : clients){
+                for(FutureTask<Double> task : clients){
                     try {
-                        sum += (Double) task.get();
+                        sum += task.get();
                     } catch (ExecutionException ignored) {
                     }
                 }

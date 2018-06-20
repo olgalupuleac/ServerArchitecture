@@ -49,7 +49,7 @@ public class Logic {
         HashMap<Integer, TestResult> testResults = new HashMap<>();
         do {
             sendRequestToClientManager(out);
-            server.start();
+            server.start(numberOfClients, queriesPerClient);
             double clientTime = in.readDouble();
             double sortTime = server.getAverageSortTime();
             double queryTime = server.getAverageTimeForProcessingQuery();
@@ -100,13 +100,13 @@ public class Logic {
     private void startServer() throws IOException {
         switch (design){
             case BLOCKING:
-                server = new BlockingServer(portForServer, numberOfClients, queriesPerClient);
+                server = new BlockingServer(portForServer);
                 break;
             case NONBLOCKING:
-                server = new NonBlockingServer(portForServer, numberOfClients, queriesPerClient);
+                server = new NonBlockingServer(portForServer);
                 break;
             case MULTITHREADED:
-                server = new MultiThreadedServer(portForServer, numberOfClients, queriesPerClient);
+                server = new MultiThreadedServer(portForServer);
                 break;
         }
     }

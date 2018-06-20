@@ -5,27 +5,30 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.*;
 import java.util.logging.Logger;
 
 import static ru.spbau.lupuleac.server.Utils.*;
 
 public class BlockingServer extends Server {
     private static final Logger LOGGER = Logger.getLogger("BlockingServer");
-    private ExecutorService threadPool = Executors.newFixedThreadPool(4);
+    private ExecutorService threadPool;
     private ServerSocket serverSocket;
+    private CountDownLatch queriesProcessed;
+    private ConcurrentLinkedQueue<ExecutorService> singleThreadExecutors;
 
-    public BlockingServer(int port, int numberOfClients, int queriesPerClient) throws IOException {
-        super(port, numberOfClients, queriesPerClient);
-        serverSocket = new ServerSocket(portNumber);
+    public BlockingServer(int port) throws IOException {
+        super(port);
         LOGGER.info("Server started");
+        singleThreadExecutors = new ConcurrentLinkedQueue<>();
+        serverSocket = new ServerSocket(port);
     }
 
     @Override
-    public void start() throws IOException {
+    public void start(int numberOfClients, int queriesPerClient) throws IOException {
+        super.start(numberOfClients, queriesPerClient);
+        threadPool = Executors.newFixedThreadPool(4);
+        queriesProcessed = new CountDownLatch(totalNumOfQueries);
         for (int i = 0; i < numberOfClients; i++) {
             if(exception != null){
                 throw exception;
@@ -34,10 +37,21 @@ public class BlockingServer extends Server {
             LOGGER.info("Client connected");
             processClient(clientSocket);
         }
+        try {
+            queriesProcessed.await();
+            threadPool.shutdown();
+            while (!singleThreadExecutors.isEmpty()){
+                ExecutorService executorService = singleThreadExecutors.remove();
+                executorService.shutdown();
+            }
+        } catch (InterruptedException ignored) {
+        }
+
     }
 
     private void processClient(Socket client) {
         ExecutorService singleThreadExecutor = Executors.newSingleThreadExecutor();
+        singleThreadExecutors.add(singleThreadExecutor);
         Thread thread = new Thread(() -> {
             try {
                 DataOutputStream out = new DataOutputStream(client.getOutputStream());
@@ -57,6 +71,8 @@ public class BlockingServer extends Server {
                         try {
                             sendArray(sortedArray, out);
                             timeToProcessQueries.addAndGet(System.currentTimeMillis() - startProcessing);
+                            queriesProcessed.countDown();
+                            LOGGER.info("queries remaining " + queriesProcessed.getCount());
                         } catch (IOException e) {
                             handle(e);
                         }
