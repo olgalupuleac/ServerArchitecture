@@ -43,21 +43,19 @@ public class Logic {
         step = args[6];
         upperLimit = args[7];
         Socket socket = new Socket(host, clientPort);
-        startServer();
         DataInputStream in = new DataInputStream(socket.getInputStream());
         DataOutputStream out = new DataOutputStream(socket.getOutputStream());
         HashMap<Integer, TestResult> testResults = new HashMap<>();
         do {
+            createServer();
             sendRequestToClientManager(out);
-            server.start(numberOfClients, queriesPerClient);
+            server.start();
             double clientTime = in.readDouble();
             double sortTime = server.getAverageSortTime();
             double queryTime = server.getAverageTimeForProcessingQuery();
             testResults.put(getChangingParameter(), new TestResult(sortTime, queryTime, clientTime));
+            server.shutDown();
         } while (isTested());
-        if(server instanceof NonBlockingServer){
-            ((NonBlockingServer)server).shutDown();
-        }
         LOGGER.info("All tests");
         return testResults;
     }
@@ -73,8 +71,8 @@ public class Logic {
         builder.build().writeDelimitedTo(out);
     }
 
-    private int getChangingParameter(){
-        switch (parameter){
+    private int getChangingParameter() {
+        switch (parameter) {
             case NUMBER_OF_CLIENTS:
                 return numberOfClients;
             case TIME_BETWEEN_QUERIES:
@@ -97,16 +95,16 @@ public class Logic {
         return false;
     }
 
-    private void startServer() throws IOException {
-        switch (design){
+    private void createServer() throws IOException {
+        switch (design) {
             case BLOCKING:
-                server = new BlockingServer(portForServer);
+                server = new BlockingServer(portForServer, numberOfClients, queriesPerClient);
                 break;
             case NONBLOCKING:
-                server = new NonBlockingServer(portForServer);
+                server = new NonBlockingServer(portForServer, numberOfClients, queriesPerClient);
                 break;
             case MULTITHREADED:
-                server = new MultiThreadedServer(portForServer);
+                server = new MultiThreadedServer(portForServer, numberOfClients, queriesPerClient);
                 break;
         }
     }
@@ -116,7 +114,7 @@ public class Logic {
         private double queryTime;
         private double clientTime;
 
-        public TestResult(double sortedTime, double queryTime, double clientTime){
+        public TestResult(double sortedTime, double queryTime, double clientTime) {
             this.clientTime = clientTime;
             this.sortedTime = sortedTime;
             this.queryTime = queryTime;

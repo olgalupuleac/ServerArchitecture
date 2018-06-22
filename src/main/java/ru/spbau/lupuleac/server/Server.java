@@ -13,8 +13,13 @@ public abstract class Server {
     protected volatile IOException exception;
     protected int totalNumOfQueries;
 
-    public Server(int port){
+    public Server(int port, int numberOfClients, int queriesPerClient){
         this.portNumber = port;
+        this.numberOfClients = numberOfClients;
+        this.queriesPerClient = queriesPerClient;
+        timeForSort = new AtomicLong(0);
+        timeToProcessQueries = new AtomicLong(0);
+        totalNumOfQueries = numberOfClients * queriesPerClient;
     }
 
     protected synchronized void handle(IOException e){
@@ -34,11 +39,7 @@ public abstract class Server {
         return (double) timeToProcessQueries.get() / totalNumOfQueries;
     }
 
-    public  void start(int numberOfClients, int queriesPerClient) throws IOException {
-        this.numberOfClients = numberOfClients;
-        this.queriesPerClient = queriesPerClient;
-        timeForSort = new AtomicLong(0);
-        timeToProcessQueries = new AtomicLong(0);
-        totalNumOfQueries = numberOfClients * queriesPerClient;
-    }
+    public abstract void start() throws IOException;
+
+    public abstract void shutDown() throws IOException;
 }

@@ -1,6 +1,7 @@
 package ru.spbau.lupuleac.server;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.sun.xml.internal.ws.policy.privateutil.PolicyUtils;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -118,8 +119,8 @@ public class NonBlockingServer extends Server {
     private Selector writingSelector;
     private ExecutorService threadPool;
 
-    public NonBlockingServer(int port) throws IOException {
-        super(port);
+    public NonBlockingServer(int port, int numberOfClients, int queriesPerClient) throws IOException {
+        super(port, numberOfClients, queriesPerClient);
         socketChannel = ServerSocketChannel.open();
         socketChannel.bind(new InetSocketAddress(portNumber));
         readingThread.start();
@@ -127,8 +128,7 @@ public class NonBlockingServer extends Server {
     }
 
     @Override
-    public void start(int numberOfClients, int queriesPerClient) throws IOException {
-        super.start(numberOfClients, queriesPerClient);
+    public void start() throws IOException {
         LOGGER.info("Start");
         queriesProcessed = new CountDownLatch(totalNumOfQueries);
         ThreadFactory namedThreadFactory =
@@ -161,10 +161,11 @@ public class NonBlockingServer extends Server {
         }
     }
 
-    public void shutDown(){
+    public void shutDown() throws IOException{
         threadPool.shutdown();
         readingThread.interrupt();
         writingThread.interrupt();
+        socketChannel.close();
     }
 
     private class Client extends NonBlockingBufferWrapper {

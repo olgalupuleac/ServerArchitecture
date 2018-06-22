@@ -17,16 +17,15 @@ public class BlockingServer extends Server {
     private CountDownLatch queriesProcessed;
     private ConcurrentLinkedQueue<ExecutorService> singleThreadExecutors;
 
-    public BlockingServer(int port) throws IOException {
-        super(port);
+    public BlockingServer(int port, int numberOfClients, int queriesPerClient) throws IOException {
+        super(port, numberOfClients, queriesPerClient);
         LOGGER.info("Server started");
         singleThreadExecutors = new ConcurrentLinkedQueue<>();
         serverSocket = new ServerSocket(port);
     }
 
     @Override
-    public void start(int numberOfClients, int queriesPerClient) throws IOException {
-        super.start(numberOfClients, queriesPerClient);
+    public void start() throws IOException {
         threadPool = Executors.newFixedThreadPool(4);
         queriesProcessed = new CountDownLatch(totalNumOfQueries);
         for (int i = 0; i < numberOfClients; i++) {
@@ -39,15 +38,20 @@ public class BlockingServer extends Server {
         }
         try {
             queriesProcessed.await();
-            threadPool.shutdown();
-            while (!singleThreadExecutors.isEmpty()){
-                ExecutorService executorService = singleThreadExecutors.remove();
-                executorService.shutdown();
-            }
         } catch (InterruptedException ignored) {
         }
-
     }
+
+    @Override
+    public void shutDown() throws IOException {
+        threadPool.shutdown();
+        while (!singleThreadExecutors.isEmpty()){
+            ExecutorService executorService = singleThreadExecutors.remove();
+            executorService.shutdown();
+        }
+        serverSocket.close();
+    }
+
 
     private void processClient(Socket client) {
         ExecutorService singleThreadExecutor = Executors.newSingleThreadExecutor();

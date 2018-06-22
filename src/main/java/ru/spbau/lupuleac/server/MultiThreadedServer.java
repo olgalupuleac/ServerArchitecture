@@ -17,14 +17,13 @@ public class MultiThreadedServer extends Server {
     private List<Thread> threads = new ArrayList<>();
 
 
-    public MultiThreadedServer(int port) throws IOException {
-        super(port);
+    public MultiThreadedServer(int port, int numberOfClients, int queriesPerClient) throws IOException {
+        super(port, numberOfClients, queriesPerClient);
         serverSocket = new ServerSocket(portNumber);
     }
 
     @Override
-    public void start(int numberOfClients, int queriesPerClient) throws IOException {
-        super.start(numberOfClients, queriesPerClient);
+    public void start() throws IOException {
         for (int i = 0; i < numberOfClients; i++) {
             Socket clientSocket = serverSocket.accept();
             LOGGER.info("Connection created");
@@ -40,6 +39,11 @@ public class MultiThreadedServer extends Server {
             }
         }
         LOGGER.info("Ok");
+    }
+
+    @Override
+    public void shutDown() throws IOException {
+        serverSocket.close();
     }
 
     private void processClient(Socket client) {
