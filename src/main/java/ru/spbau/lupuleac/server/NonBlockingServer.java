@@ -1,11 +1,9 @@
 package ru.spbau.lupuleac.server;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.sun.xml.internal.ws.policy.privateutil.PolicyUtils;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
@@ -13,17 +11,14 @@ import java.nio.channels.SocketChannel;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
-
-import static ru.spbau.lupuleac.server.Utils.sort;
 
 public class NonBlockingServer extends Server {
     private static final Logger LOGGER = Logger.getLogger("NonBlockingServer");
 
-    private final ConcurrentLinkedQueue<Client> registerToRead = new ConcurrentLinkedQueue<>();
-    private final ConcurrentLinkedQueue<Client> registerToWrite = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<ClientHandler> registerToRead = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<ClientHandler> registerToWrite = new ConcurrentLinkedQueue<>();
     private CountDownLatch queriesProcessed;
     private AtomicInteger queriesReceived = new AtomicInteger(0);
     private ServerSocketChannel socketChannel;
@@ -39,8 +34,9 @@ public class NonBlockingServer extends Server {
                     }
                     //LOGGER.info("In read " + queriesReceived.get());
                     while (!registerToRead.isEmpty()) {
-                        Client client = registerToRead.remove();
-                        client.channel.register(readingSelector, SelectionKey.OP_READ, client);
+                        ClientHandler client = registerToRead.remove();
+                        ((SocketChannel) client.getReadableChannel()).
+                                register(readingSelector, SelectionKey.OP_READ, client);
                     }
                     int ready = readingSelector.select();
                     if (ready == 0) {
@@ -51,13 +47,13 @@ public class NonBlockingServer extends Server {
                     while (keyIterator.hasNext()) {
                         SelectionKey key = keyIterator.next();
                         if (key.isReadable()) {
-                            Client client = ((Client) key.attachment());
-                            if(client.getState() == NonBlockingBufferWrapper.READ_SIZE){
+                            ClientHandler client = ((ClientHandler) key.attachment());
+                            if(client.getState() == ClientHandler.READ_SIZE){
                                 client.readSize();
                             }
-                            if(client.getState() == NonBlockingBufferWrapper.READ_DATA){
+                            if(client.getState() == ClientHandler.READ_DATA){
                                 int nextOp = client.readData();
-                                if(nextOp == NonBlockingBufferWrapper.PROCESS_DATA){
+                                if(nextOp == ClientHandler.PROCESS_DATA){
                                     client.process();
                                 }
                             }
@@ -81,8 +77,9 @@ public class NonBlockingServer extends Server {
                         continue;
                     }
                     while (!registerToWrite.isEmpty()) {
-                        Client client = registerToWrite.remove();
-                        client.channel.register(writingSelector, SelectionKey.OP_WRITE, client);
+                        ClientHandler client = registerToWrite.remove();
+                        ((SocketChannel)client.getWritableChannel()).
+                                register(writingSelector, SelectionKey.OP_WRITE, client);
                     }
                     int ready = writingSelector.select();
                     //LOGGER.info("ready " + ready);
@@ -95,12 +92,9 @@ public class NonBlockingServer extends Server {
                         SelectionKey key = keyIterator.next();
                         if (key.isWritable()) {
                             //LOGGER.info("Write to channel");
-                            Client client = ((Client) key.attachment());
-                            if(client.getState() == NonBlockingBufferWrapper.WRITE){
-                                int nextOp = client.write();
-                                if(nextOp == NonBlockingBufferWrapper.READ_SIZE){
-                                    queriesProcessed.countDown();
-                                }
+                            ClientHandler client = ((ClientHandler) key.attachment());
+                            if(client.getState() == ClientHandler.WRITE){
+                                client.write();
                             }
                         }
                         keyIterator.remove();
@@ -119,7 +113,9 @@ public class NonBlockingServer extends Server {
     private Selector writingSelector;
     private ExecutorService threadPool;
 
-    public NonBlockingServer(int port, int numberOfClients, int queriesPerClient) throws IOException {
+    public NonBlockingServer(int port,
+                             int numberOfClients,
+                             int queriesPerClient) throws IOException {
         super(port, numberOfClients, queriesPerClient);
         socketChannel = ServerSocketChannel.open();
         socketChannel.bind(new InetSocketAddress(portNumber));
@@ -147,7 +143,8 @@ public class NonBlockingServer extends Server {
                 channel = socketChannel.accept();
             }
             LOGGER.info("Client connected");
-            Client client = new Client(channel);
+            ClientHandler client = new ClientHandler(channel,
+                    channel, threadPool, queriesProcessed);
             channel.configureBlocking(false);
             registerToRead.add(client);
             readingSelector.wakeup();
@@ -166,30 +163,5 @@ public class NonBlockingServer extends Server {
         readingThread.interrupt();
         writingThread.interrupt();
         socketChannel.close();
-    }
-
-    private class Client extends NonBlockingBufferWrapper {
-        public void process() {
-            LOGGER.info("process");
-            threadPool.submit(() -> {
-                int[] arrayToSort = Utils.getArrayFromBytes(data.array());
-                if (arrayToSort == null) {
-                    LOGGER.warning("Parse exception");
-                    return;
-                }
-                long start = System.currentTimeMillis();
-                sort(arrayToSort);
-                timeForSort.addAndGet(System.currentTimeMillis() - start);
-                byte[] res = Utils.toByteArray(arrayToSort);
-                data = ByteBuffer.allocate(4 + res.length);
-                data.putInt(res.length);
-                data.put(res);
-                processData();
-            });
-        }
-
-        private Client(SocketChannel channel) {
-            super(channel);
-        }
     }
 }
