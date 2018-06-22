@@ -3,7 +3,7 @@ package ru.spbau.lupuleac.app;
 import javafx.concurrent.Task;
 import ru.spbau.lupuleac.server.BlockingServer;
 import ru.spbau.lupuleac.server.MultiThreadedServer;
-import ru.spbau.lupuleac.server.NonBlockingServer;
+import ru.spbau.lupuleac.server.nonblocking.NonBlockingServer;
 import ru.spbau.lupuleac.server.Server;
 
 import java.io.DataInputStream;
@@ -111,7 +111,7 @@ public class ServerTask extends Task<Map<Integer, ServerTask.TestResult>> {
             double queryTime = server.getAverageTimeForProcessingQuery();
             testResults.put(getChangingParameter(), new TestResult(sortTime, queryTime, clientTime));
             server.shutDown();
-            updateProgress(++iteration, total);
+           // updateProgress(++iteration, total);
         } while (isTested());
         LOGGER.info("All tests");
         return testResults;

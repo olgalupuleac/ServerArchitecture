@@ -1,12 +1,12 @@
-package ru.spbau.lupuleac.server;
+package ru.spbau.lupuleac.server.nonblocking;
+
+import ru.spbau.lupuleac.server.Utils;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.*;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
-import java.util.concurrent.FutureTask;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static ru.spbau.lupuleac.server.Utils.sort;
@@ -18,7 +18,10 @@ public class ClientHandler {
     protected ReadableByteChannel readableChannel;
     protected AtomicLong timeForSort;
     protected volatile int state;
-    protected CountDownLatch queriesProcessed;
+    protected CountDownLatch queriesProcessedTotal;
+    protected int queriesToDo;
+    protected long start;
+    protected long time;
 
     public static final int READ_SIZE = 1;
     public static final int READ_DATA = 2;
@@ -28,8 +31,10 @@ public class ClientHandler {
     public ClientHandler(ReadableByteChannel readableByteChannel,
                          WritableByteChannel writableByteChannel,
                          CountDownLatch latch,
-                         AtomicLong sortTime) {
-        queriesProcessed = latch;
+                         AtomicLong sortTime,
+                         int queries) {
+        queriesToDo = queries;
+        queriesProcessedTotal = latch;
         readableChannel = readableByteChannel;
         writableChannel = writableByteChannel;
         timeForSort = sortTime;
@@ -38,6 +43,9 @@ public class ClientHandler {
     }
 
     public int readSize() throws IOException {
+        if(size.remaining() == 4){
+            start = System.currentTimeMillis();
+        }
         readableChannel.read(size);
         if (size.remaining() == 0) {
             size.flip();
@@ -79,18 +87,23 @@ public class ClientHandler {
         writableChannel.write(data);
         if (!data.hasRemaining()) {
             data.clear();
-            queriesProcessed.countDown();
+            queriesProcessedTotal.countDown();
+            queriesToDo--;
+            time += (System.currentTimeMillis() - start);
+            if(queriesToDo == 0){
+                state = 0;
+            }
             state = READ_SIZE;
         }
         return state;
     }
 
-    public int getState() {
-        return state;
+    public long getTime(){
+        return time;
     }
 
-    public AtomicLong getTimeForSort() {
-        return timeForSort;
+    public int getState() {
+        return state;
     }
 
     public ReadableByteChannel getReadableChannel() {
@@ -102,6 +115,6 @@ public class ClientHandler {
     }
 
     public CountDownLatch getQueriesProcessed() {
-        return queriesProcessed;
+        return queriesProcessedTotal;
     }
 }

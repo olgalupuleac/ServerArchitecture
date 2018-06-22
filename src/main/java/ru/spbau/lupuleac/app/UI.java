@@ -20,7 +20,7 @@ public class UI {
             charts[2].getData().add(new XYChart.Data<>(result.getKey(), result.getValue().getQueryTime()));
         }
         TabPane tabPane = new TabPane();
-        String[] tabName = {"Sort time", "Processing Time", "Client Time"};
+        String[] tabName = {"Client time", "Sort Time", "Process Time"};
         for (int i = 0; i < 3; ++i) {
             NumberAxis xAxis = new NumberAxis();
             NumberAxis yAxis = new NumberAxis();

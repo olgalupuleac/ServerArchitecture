@@ -32,10 +32,13 @@ public abstract class Server {
     }
 
     public double getAverageSortTime(){
+        System.err.println("time for sort " + timeForSort.get() + ",num of queries " + totalNumOfQueries);
         return (double) timeForSort.get() / totalNumOfQueries;
     }
 
     public double getAverageTimeForProcessingQuery(){
+        System.err.println("time for sort " + timeToProcessQueries.get()
+                + ",num of queries " + totalNumOfQueries);
         return (double) timeToProcessQueries.get() / totalNumOfQueries;
     }
 

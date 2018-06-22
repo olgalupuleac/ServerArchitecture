@@ -24,9 +24,9 @@ public class MultiThreadedServer extends Server {
 
     @Override
     public void start() throws IOException {
+        LOGGER.info("Start");
         for (int i = 0; i < numberOfClients; i++) {
             Socket clientSocket = serverSocket.accept();
-            LOGGER.info("Connection created");
             processClient(clientSocket);
             if(exception != null){
                 throw exception;

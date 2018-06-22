@@ -19,21 +19,20 @@ public class BlockingServer extends Server {
 
     public BlockingServer(int port, int numberOfClients, int queriesPerClient) throws IOException {
         super(port, numberOfClients, queriesPerClient);
-        LOGGER.info("Server started");
-        singleThreadExecutors = new ConcurrentLinkedQueue<>();
-        serverSocket = new ServerSocket(port);
     }
 
     @Override
     public void start() throws IOException {
+        singleThreadExecutors = new ConcurrentLinkedQueue<>();
+        serverSocket = new ServerSocket(portNumber);
         threadPool = Executors.newFixedThreadPool(4);
+        LOGGER.info("Start");
         queriesProcessed = new CountDownLatch(totalNumOfQueries);
         for (int i = 0; i < numberOfClients; i++) {
             if(exception != null){
                 throw exception;
             }
             Socket clientSocket = serverSocket.accept();
-            LOGGER.info("Client connected");
             processClient(clientSocket);
         }
         try {
@@ -76,7 +75,6 @@ public class BlockingServer extends Server {
                             sendArray(sortedArray, out);
                             timeToProcessQueries.addAndGet(System.currentTimeMillis() - startProcessing);
                             queriesProcessed.countDown();
-                            LOGGER.info("queries remaining " + queriesProcessed.getCount());
                         } catch (IOException e) {
                             handle(e);
                         }
