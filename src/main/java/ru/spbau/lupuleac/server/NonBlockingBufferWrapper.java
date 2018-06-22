@@ -51,7 +51,6 @@ public class NonBlockingBufferWrapper {
             read = -1;
         }
         if(read == -1){
-            System.err.println("Oups");
             channel.close();
             state = 0;
         }
