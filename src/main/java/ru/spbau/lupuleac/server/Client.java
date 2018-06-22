@@ -26,20 +26,23 @@ public class Client implements Callable {
     }
 
     public Double call() throws IOException {
+        System.err.println("hello");
         long start = System.currentTimeMillis();
         try(Socket socket = new Socket(host, portNumber)){
+            System.err.println(numberOfQueries);
             DataInputStream in = new DataInputStream(socket.getInputStream());
             DataOutputStream out = new DataOutputStream(socket.getOutputStream());
             for (int i = 0; i < numberOfQueries; i++) {
                 int[] a = generateArray(elementsInArray);
                 sendArray(a, out);
-                int size = in.readInt();
+                in.readInt();
                 int[] res = getArray(in);
-                assert isSorted(res);
-                Thread.sleep(timeInterval * 1000);
+                //assert isSorted(res);
+                Thread.sleep(timeInterval);
             }
             System.err.println("Ok");
-        } catch (InterruptedException ignored) {
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
         return (double) (System.currentTimeMillis() - start) / numberOfQueries;
     }

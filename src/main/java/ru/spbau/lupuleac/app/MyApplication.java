@@ -189,12 +189,12 @@ public class MyApplication extends Application {
                     timeInterval = Integer.parseInt(timeIntervalTF.getText());
                     step = Integer.parseInt(stepTF.getText());
                     upperLimit = Integer.parseInt(upperLimitTF.getText());
-                    Logic logic = new Logic();
-                    Map<Integer, Logic.TestResult> results = logic.startTesting(clientManagerHost,
+                    ServerTask serverTask = new ServerTask(clientManagerHost,
                             designToTest, changingParameter,
                             host, clientPort, portForServer, queriesPerClient,
                             numberOfClients, numberOfElementsInArray, timeInterval, step, upperLimit);
-                    window.setScene(new Scene(UI.createSeries(results), 800, 600));
+                    Map<Integer, ServerTask.TestResult> results = serverTask.call();
+                    window.setScene(new Scene(UI.createSeries(results, changingParameter), 800, 600));
                     window.setTitle("Результат тестирования");
                     window.show();
                 }catch (Exception ex){
@@ -217,7 +217,20 @@ public class MyApplication extends Application {
     public enum ChangingParameter {
         NUMBER_OF_ELEMENTS_IN_ARRAY,
         NUMBER_OF_CLIENTS,
-        TIME_BETWEEN_QUERIES
+        TIME_BETWEEN_QUERIES;
+
+        @Override
+        public String toString() {
+            switch (this){
+                case NUMBER_OF_ELEMENTS_IN_ARRAY:
+                    return "Number of elements in array";
+                case TIME_BETWEEN_QUERIES:
+                    return "Time interval between queries";
+                case NUMBER_OF_CLIENTS:
+                    return "Number of clients";
+            }
+            return super.toString();
+        }
     }
 
 }

@@ -1,5 +1,6 @@
 package ru.spbau.lupuleac.app;
 
+import javafx.concurrent.Task;
 import ru.spbau.lupuleac.server.BlockingServer;
 import ru.spbau.lupuleac.server.MultiThreadedServer;
 import ru.spbau.lupuleac.server.NonBlockingServer;
@@ -13,8 +14,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Logger;
 
-public class Logic {
-    private static final Logger LOGGER = Logger.getLogger("Logic");
+public class ServerTask extends Task<Map<Integer, ServerTask.TestResult>> {
+    private static final Logger LOGGER = Logger.getLogger("ServerTask");
     private Server server;
     private MyApplication.ChangingParameter parameter;
     private MyApplication.Design design;
@@ -27,10 +28,12 @@ public class Logic {
     private int step;
     private int upperLimit;
     private String serverHost;
+    private String hostForClientManager;
 
-    public Map<Integer, TestResult> startTesting(String host, MyApplication.Design design,
+    public ServerTask(String host, MyApplication.Design design,
                                                  MyApplication.ChangingParameter parameter, String serverHost,
-                                                 int... args) throws IOException {
+                                                 int... args){
+        hostForClientManager = host;
         this.design = design;
         this.parameter = parameter;
         this.serverHost = serverHost;
@@ -42,22 +45,6 @@ public class Logic {
         timeInterval = args[5];
         step = args[6];
         upperLimit = args[7];
-        Socket socket = new Socket(host, clientPort);
-        DataInputStream in = new DataInputStream(socket.getInputStream());
-        DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-        HashMap<Integer, TestResult> testResults = new HashMap<>();
-        do {
-            createServer();
-            sendRequestToClientManager(out);
-            server.start();
-            double clientTime = in.readDouble();
-            double sortTime = server.getAverageSortTime();
-            double queryTime = server.getAverageTimeForProcessingQuery();
-            testResults.put(getChangingParameter(), new TestResult(sortTime, queryTime, clientTime));
-            server.shutDown();
-        } while (isTested());
-        LOGGER.info("All tests");
-        return testResults;
     }
 
     private void sendRequestToClientManager(DataOutputStream out) throws IOException {
@@ -95,18 +82,39 @@ public class Logic {
         return false;
     }
 
-    private void createServer() throws IOException {
+    private Server createServer() throws IOException {
         switch (design) {
             case BLOCKING:
-                server = new BlockingServer(portForServer, numberOfClients, queriesPerClient);
-                break;
+                return new BlockingServer(portForServer, numberOfClients, queriesPerClient);
             case NONBLOCKING:
-                server = new NonBlockingServer(portForServer, numberOfClients, queriesPerClient);
-                break;
+                return new NonBlockingServer(portForServer, numberOfClients, queriesPerClient);
             case MULTITHREADED:
-                server = new MultiThreadedServer(portForServer, numberOfClients, queriesPerClient);
-                break;
+                return new MultiThreadedServer(portForServer, numberOfClients, queriesPerClient);
         }
+        return null;
+    }
+
+    @Override
+    protected Map<Integer, TestResult> call() throws IOException {
+        Socket socket = new Socket(hostForClientManager, clientPort);
+        DataInputStream in = new DataInputStream(socket.getInputStream());
+        DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+        HashMap<Integer, TestResult> testResults = new HashMap<>();
+        int iteration = 0;
+        int total = (upperLimit - getChangingParameter()) / step;
+        do {
+            server = createServer();
+            sendRequestToClientManager(out);
+            server.start();
+            double clientTime = in.readDouble();
+            double sortTime = server.getAverageSortTime();
+            double queryTime = server.getAverageTimeForProcessingQuery();
+            testResults.put(getChangingParameter(), new TestResult(sortTime, queryTime, clientTime));
+            server.shutDown();
+            updateProgress(++iteration, total);
+        } while (isTested());
+        LOGGER.info("All tests");
+        return testResults;
     }
 
     public static class TestResult {
@@ -122,10 +130,6 @@ public class Logic {
 
         public double getSortedTime() {
             return sortedTime;
-        }
-
-        public void setSortedTime(double sortedTime) {
-            this.sortedTime = sortedTime;
         }
 
         public double getQueryTime() {

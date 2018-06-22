@@ -8,6 +8,8 @@ import java.io.DataOutputStream;
 import java.nio.channels.Channels;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -32,8 +34,8 @@ public class NonBlockingBufferWrapperTest {
         ClientHandler clientHandler = new ClientHandler(
                 Channels.newChannel(new ByteArrayInputStream(inputForServer)),
                 Channels.newChannel(realOutput),
-                Executors.newSingleThreadExecutor(),
-                new CountDownLatch(1)
+                new CountDownLatch(1),
+                new AtomicLong(0)
         );
         int firstState = clientHandler.readSize();
         assertEquals(ClientHandler.READ_DATA, firstState);
@@ -69,8 +71,8 @@ public class NonBlockingBufferWrapperTest {
         ClientHandler clientHandler = new ClientHandler(
                 Channels.newChannel(new ByteArrayInputStream(inputForServer)),
                 Channels.newChannel(realOutput),
-                Executors.newFixedThreadPool(5),
-                new CountDownLatch(numberOfQueries)
+                new CountDownLatch(numberOfQueries),
+                new AtomicLong(0)
         );
         for(int i = 0; i < numberOfQueries; i++){
             int firstState = clientHandler.readSize();

@@ -16,8 +16,7 @@ public class ClientHandler {
     protected ByteBuffer size;
     protected WritableByteChannel writableChannel;
     protected ReadableByteChannel readableChannel;
-    protected ExecutorService threadPool;
-    protected AtomicLong timeForSort = new AtomicLong(0);
+    protected AtomicLong timeForSort;
     protected volatile int state;
     protected CountDownLatch queriesProcessed;
 
@@ -28,12 +27,12 @@ public class ClientHandler {
 
     public ClientHandler(ReadableByteChannel readableByteChannel,
                          WritableByteChannel writableByteChannel,
-                         ExecutorService executorService,
-                         CountDownLatch latch) {
+                         CountDownLatch latch,
+                         AtomicLong sortTime) {
         queriesProcessed = latch;
         readableChannel = readableByteChannel;
         writableChannel = writableByteChannel;
-        threadPool = executorService;
+        timeForSort = sortTime;
         state = READ_SIZE;
         size = ByteBuffer.allocate(4);
     }
@@ -58,28 +57,23 @@ public class ClientHandler {
         return state;
     }
 
-    public Future<?> process() {
-        return threadPool.submit(() -> {
-            int[] arrayToSort = Utils.getArrayFromBytes(data.array());
-            if (arrayToSort == null) {
-                throw new RuntimeException("Parse exception");
-            }
-            long start = System.currentTimeMillis();
-            sort(arrayToSort);
-            timeForSort.addAndGet(System.currentTimeMillis() - start);
-            byte[] res = Utils.toByteArray(arrayToSort);
-            data = ByteBuffer.allocate(4 + res.length);
-            data.putInt(res.length);
-            data.put(res);
-            processData();
-        });
-    }
-
-    public int processData() {
+    public synchronized int process() {
+        int[] arrayToSort = Utils.getArrayFromBytes(data.array());
+        if (arrayToSort == null) {
+            throw new RuntimeException("Parse exception");
+        }
+        long start = System.currentTimeMillis();
+        sort(arrayToSort);
+        timeForSort.addAndGet(System.currentTimeMillis() - start);
+        byte[] res = Utils.toByteArray(arrayToSort);
+        data = ByteBuffer.allocate(4 + res.length);
+        data.putInt(res.length);
+        data.put(res);
         data.flip();
         state = WRITE;
         return state;
     }
+
 
     public int write() throws IOException {
         writableChannel.write(data);

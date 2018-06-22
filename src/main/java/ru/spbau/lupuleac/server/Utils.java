@@ -20,7 +20,6 @@ public class Utils {
         }
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         builder.build().writeDelimitedTo(outputStream);
-        System.err.println(outputStream.toByteArray().length);
         out.writeInt(outputStream.toByteArray().length);
         builder.build().writeDelimitedTo(out);
     }
