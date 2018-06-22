@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
-public class NonBlockingBufferWrapperTest {
+public class ClientHandlerTest {
     @Test
     public void test() throws Exception {
         int[] array = {1, 2, 3};

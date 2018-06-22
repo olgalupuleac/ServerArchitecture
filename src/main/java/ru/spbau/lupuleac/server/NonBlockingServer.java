@@ -4,10 +4,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
-import java.nio.channels.ServerSocketChannel;
-import java.nio.channels.SocketChannel;
+import java.nio.channels.*;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.concurrent.*;
@@ -54,7 +51,7 @@ public class NonBlockingServer extends Server {
                             if(client.getState() == ClientHandler.READ_DATA){
                                 int nextOp = client.readData();
                                 if(nextOp == ClientHandler.PROCESS_DATA){
-                                    client.process();
+                                    threadPool.submit((Runnable) client::process);
                                 }
                             }
                         }
@@ -90,14 +87,17 @@ public class NonBlockingServer extends Server {
                     Iterator<SelectionKey> keyIterator = selectedKeys.iterator();
                     while (keyIterator.hasNext()) {
                         SelectionKey key = keyIterator.next();
-                        if (key.isWritable()) {
-                            //LOGGER.info("Write to channel");
-                            ClientHandler client = ((ClientHandler) key.attachment());
-                            if(client.getState() == ClientHandler.WRITE){
-                                client.write();
+                        try {
+                            if (key.isWritable()) {
+                                //LOGGER.info("Write to channel");
+                                ClientHandler client = ((ClientHandler) key.attachment());
+                                if(client.getState() == ClientHandler.WRITE){
+                                    client.write();
+                                }
                             }
+                            keyIterator.remove();
+                        } catch (CancelledKeyException ignored){
                         }
-                        keyIterator.remove();
                     }
 
                 }
@@ -144,7 +144,7 @@ public class NonBlockingServer extends Server {
             }
             LOGGER.info("Client connected");
             ClientHandler client = new ClientHandler(channel,
-                    channel, threadPool, queriesProcessed);
+                    channel, queriesProcessed, timeForSort);
             channel.configureBlocking(false);
             registerToRead.add(client);
             readingSelector.wakeup();
