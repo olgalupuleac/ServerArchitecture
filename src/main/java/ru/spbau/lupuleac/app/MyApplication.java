@@ -195,7 +195,7 @@ public class MyApplication extends Application {
                             numberOfClients, numberOfElementsInArray, timeInterval, step, upperLimit);
                     Map<Integer, ServerTask.TestResult> results = serverTask.call();
                     window.setScene(new Scene(UI.createSeries(results, changingParameter), 800, 600));
-                    window.setTitle("Результат тестирования");
+                    window.setTitle("Tests results");
                     window.show();
                 }catch (Exception ex){
                     ex.printStackTrace();
