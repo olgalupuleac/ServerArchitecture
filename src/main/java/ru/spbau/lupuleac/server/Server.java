@@ -1,6 +1,7 @@
 package ru.spbau.lupuleac.server;
 
 import java.io.IOException;
+import java.net.Socket;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -22,12 +23,13 @@ public abstract class Server {
         totalNumOfQueries = numberOfClients * queriesPerClient;
     }
 
-    protected synchronized void handle(IOException e){
-        if(exception != null){
-            exception.addSuppressed(e);
+    protected synchronized void handle(IOException e, Socket socket) {
+        exception = e;
+        try {
+            socket.close();
         }
-        else {
-            exception = e;
+        catch (IOException ex){
+            exception.addSuppressed(ex);
         }
     }
 
@@ -45,4 +47,8 @@ public abstract class Server {
     public abstract void start() throws IOException;
 
     public abstract void shutDown() throws IOException;
+
+    public IOException getException() {
+        return exception;
+    }
 }

@@ -29,6 +29,7 @@ public class MultiThreadedServer extends Server {
             Socket clientSocket = serverSocket.accept();
             processClient(clientSocket);
             if(exception != null){
+                shutDown();
                 throw exception;
             }
         }
@@ -64,7 +65,7 @@ public class MultiThreadedServer extends Server {
                     timeToProcessQueries.addAndGet(endProcessing - startProcessing);
                 }
             } catch (IOException e) {
-                handle(e);
+                handle(e, client);
             }
         });
         threads.add(thread);

@@ -4,7 +4,11 @@ import javafx.scene.chart.LineChart;
 import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.XYChart;
 import javafx.scene.control.*;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.Priority;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.Map;
 
 public class UI {
@@ -35,17 +39,38 @@ public class UI {
         return tabPane;
     }
 
-    public void progressBar(){
-        final Slider slider = new Slider();
-        slider.setMin(0);
-        slider.setMax(50);
+    public static void exceptionDialog(Exception ex){
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle("Exception Dialog");
+        alert.setHeaderText("Problems while running server");
+        alert.setContentText(ex.getMessage());
 
-        final ProgressBar pb = new ProgressBar(0);
-        final ProgressIndicator pi = new ProgressIndicator(0);
 
-        slider.valueProperty().addListener((ov, old_val, new_val) -> {
-            pb.setProgress(new_val.doubleValue()/50);
-            pi.setProgress(new_val.doubleValue()/50);
-        });
+// Create expandable Exception.
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        ex.printStackTrace(pw);
+        String exceptionText = sw.toString();
+
+        Label label = new Label("The exception stacktrace was:");
+
+        TextArea textArea = new TextArea(exceptionText);
+        textArea.setEditable(false);
+        textArea.setWrapText(true);
+
+        textArea.setMaxWidth(Double.MAX_VALUE);
+        textArea.setMaxHeight(Double.MAX_VALUE);
+        GridPane.setVgrow(textArea, Priority.ALWAYS);
+        GridPane.setHgrow(textArea, Priority.ALWAYS);
+
+        GridPane expContent = new GridPane();
+        expContent.setMaxWidth(Double.MAX_VALUE);
+        expContent.add(label, 0, 0);
+        expContent.add(textArea, 0, 1);
+
+// Set expandable Exception into the dialog pane.
+        alert.getDialogPane().setExpandableContent(expContent);
+
+        alert.showAndWait();
     }
 }

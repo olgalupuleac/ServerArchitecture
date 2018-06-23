@@ -30,9 +30,15 @@ public class BlockingServer extends Server {
         queriesProcessed = new CountDownLatch(totalNumOfQueries);
         for (int i = 0; i < numberOfClients; i++) {
             if(exception != null){
+                shutDown();
                 throw exception;
             }
-            Socket clientSocket = serverSocket.accept();
+            Socket clientSocket = null;
+            try {
+                clientSocket = serverSocket.accept();
+            } catch (IOException e) {
+                exception = e;
+            }
             processClient(clientSocket);
         }
         try {
@@ -76,12 +82,12 @@ public class BlockingServer extends Server {
                             timeToProcessQueries.addAndGet(System.currentTimeMillis() - startProcessing);
                             queriesProcessed.countDown();
                         } catch (IOException e) {
-                            handle(e);
+                            handle(e, client);
                         }
                     });
                 }
             } catch (IOException e) {
-                handle(e);
+                handle(e, client);
             } catch (InterruptedException | ExecutionException ignored) {
             }
         });

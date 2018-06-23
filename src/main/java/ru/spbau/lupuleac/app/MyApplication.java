@@ -11,6 +11,7 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 
+import java.io.IOException;
 import java.util.Map;
 
 
@@ -197,7 +198,10 @@ public class MyApplication extends Application {
                     window.setScene(new Scene(UI.createSeries(results, changingParameter), 800, 600));
                     window.setTitle("Tests results");
                     window.show();
-                }catch (Exception ex){
+                }catch (IOException e1){
+                    UI.exceptionDialog(e1);
+                }
+                catch (Exception ex){
                     ex.printStackTrace();
                     //TODO incorrect input
                 }

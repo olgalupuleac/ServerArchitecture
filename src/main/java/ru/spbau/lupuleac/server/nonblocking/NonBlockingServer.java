@@ -20,46 +20,61 @@ public class NonBlockingServer extends Server {
     private final ConcurrentLinkedQueue<ClientHandler> registerToRead = new ConcurrentLinkedQueue<>();
     private final ConcurrentLinkedQueue<ClientHandler> registerToWrite = new ConcurrentLinkedQueue<>();
     private ServerSocketChannel socketChannel;
+    private CountDownLatch queriesProcessed = new CountDownLatch(totalNumOfQueries);
 
 
     private Thread readingThread = new Thread(new Runnable() {
         @Override
         public void run() {
-            try {
-                while (!Thread.interrupted()) {
-                    if(readingSelector == null){
-                        continue;
-                    }
-                    while (!registerToRead.isEmpty()) {
-                        ClientHandler client = registerToRead.remove();
+            while (!Thread.interrupted()) {
+                if (readingSelector == null) {
+                    continue;
+                }
+                while (!registerToRead.isEmpty()) {
+                    ClientHandler client = registerToRead.remove();
+                    try {
                         ((SocketChannel) client.getReadableChannel()).
                                 register(readingSelector, SelectionKey.OP_READ, client);
-                    }
-                    int ready = readingSelector.select();
-                    if (ready == 0) {
-                        continue;
-                    }
-                    Set<SelectionKey> selectedKeys = readingSelector.selectedKeys();
-                    Iterator<SelectionKey> keyIterator = selectedKeys.iterator();
-                    while (keyIterator.hasNext()) {
-                        SelectionKey key = keyIterator.next();
-                        if (key.isReadable()) {
-                            ClientHandler client = ((ClientHandler) key.attachment());
-                            if(client.getState() == ClientHandler.READ_SIZE){
-                                client.readSize();
-                            }
-                            if(client.getState() == ClientHandler.READ_DATA){
-                                int nextOp = client.readData();
-                                if(nextOp == ClientHandler.PROCESS_DATA){
-                                    threadPool.submit((Runnable) client::process);
-                                }
-                            }
-                        }
-                        keyIterator.remove();
+                    } catch (ClosedChannelException e) {
+                        handle(e, client.getReadableChannel());
                     }
                 }
-            } catch (IOException e) {
-               handle(e);
+                int ready = 0;
+                try {
+                    ready = readingSelector.select();
+                } catch (IOException e) {
+                    exception = e;
+                }
+                if (ready == 0) {
+                    continue;
+                }
+                Set<SelectionKey> selectedKeys = readingSelector.selectedKeys();
+                Iterator<SelectionKey> keyIterator = selectedKeys.iterator();
+                while (keyIterator.hasNext()) {
+                    SelectionKey key = keyIterator.next();
+                    if (key.isReadable()) {
+                        ClientHandler client = ((ClientHandler) key.attachment());
+                        if (client.getState() == ClientHandler.READ_SIZE) {
+                            try {
+                                client.readSize();
+                            } catch (IOException e) {
+                                handle(e, client.getReadableChannel());
+                            }
+                        }
+                        if (client.getState() == ClientHandler.READ_DATA) {
+                            int nextOp = 0;
+                            try {
+                                nextOp = client.readData();
+                            } catch (IOException e) {
+                                handle(e, client.getReadableChannel());
+                            }
+                            if (nextOp == ClientHandler.PROCESS_DATA) {
+                                threadPool.submit((Runnable) client::process);
+                            }
+                        }
+                    }
+                    keyIterator.remove();
+                }
             }
         }
     });
@@ -67,41 +82,51 @@ public class NonBlockingServer extends Server {
     private Thread writingThread = new Thread(new Runnable() {
         @Override
         public void run() {
-            try {
-                while (!Thread.interrupted()) {
-                    if(writingSelector == null){
-                        continue;
-                    }
-                    while (!registerToWrite.isEmpty()) {
-                        ClientHandler client = registerToWrite.remove();
-                        ((SocketChannel)client.getWritableChannel()).
+            while (!Thread.interrupted()) {
+                if (writingSelector == null) {
+                    continue;
+                }
+                while (!registerToWrite.isEmpty()) {
+                    ClientHandler client = registerToWrite.remove();
+                    try {
+                        ((SocketChannel) client.getWritableChannel()).
                                 register(writingSelector, SelectionKey.OP_WRITE, client);
+                    } catch (ClosedChannelException e) {
+                        handle(e, client.getWritableChannel());
                     }
-                    int ready = writingSelector.select();
-                    if (ready == 0) {
-                        continue;
-                    }
-                    Set<SelectionKey> selectedKeys = writingSelector.selectedKeys();
-                    Iterator<SelectionKey> keyIterator = selectedKeys.iterator();
-                    while (keyIterator.hasNext()) {
-                        SelectionKey key = keyIterator.next();
-                        try {
-                            if (key.isWritable()) {
-                                ClientHandler client = ((ClientHandler) key.attachment());
-                                if(client.getState() == ClientHandler.WRITE){
+                }
+                int ready = 0;
+                try {
+                    ready = writingSelector.select();
+                } catch (IOException e) {
+                    exception = e;
+                }
+                if (ready == 0) {
+                    continue;
+                }
+                Set<SelectionKey> selectedKeys = writingSelector.selectedKeys();
+                Iterator<SelectionKey> keyIterator = selectedKeys.iterator();
+                while (keyIterator.hasNext()) {
+                    SelectionKey key = keyIterator.next();
+                    try {
+                        if (key.isWritable()) {
+                            ClientHandler client = ((ClientHandler) key.attachment());
+                            if (client.getState() == ClientHandler.WRITE) {
+                                try {
                                     client.write();
+                                } catch (IOException e) {
+                                    handle(e, client.getWritableChannel());
                                 }
                             }
-                            keyIterator.remove();
-                        } catch (CancelledKeyException ignored){
                         }
+                        keyIterator.remove();
+                    } catch (CancelledKeyException ignored) {
                     }
-
                 }
-            } catch (IOException e) {
-                handle(e);
+
             }
         }
+
     });
 
 
@@ -122,7 +147,6 @@ public class NonBlockingServer extends Server {
     @Override
     public void start() throws IOException {
         LOGGER.info("Start");
-        CountDownLatch queriesProcessed = new CountDownLatch(totalNumOfQueries);
         ThreadFactory namedThreadFactory =
                 new ThreadFactoryBuilder().setNameFormat("my-sad-thread-%d").build();
         threadPool = Executors.newFixedThreadPool(4, namedThreadFactory);
@@ -131,7 +155,7 @@ public class NonBlockingServer extends Server {
         readingSelector = Selector.open();
         writingSelector = Selector.open();
         for (int i = 0; i < numberOfClients; i++) {
-            if(exception != null){
+            if (exception != null) {
                 throw exception;
             }
             SocketChannel channel = null;
@@ -150,6 +174,10 @@ public class NonBlockingServer extends Server {
         }
         try {
             queriesProcessed.await();
+            if(exception != null){
+                shutDown();
+                throw exception;
+            }
             clients.forEach(x -> {
                 timeToProcessQueries.addAndGet(x.getTime());
                 System.err.println(x.getTime());
@@ -163,10 +191,22 @@ public class NonBlockingServer extends Server {
         }
     }
 
-    public void shutDown() throws IOException{
+    public void shutDown() throws IOException {
         threadPool.shutdown();
         readingThread.interrupt();
         writingThread.interrupt();
         socketChannel.close();
+    }
+
+    private void handle(IOException e, Channel channel) {
+        exception = e;
+        try {
+            channel.close();
+        } catch (IOException e1) {
+            exception.addSuppressed(e1);
+        }
+        while(queriesProcessed.getCount() != 0){
+            queriesProcessed.countDown();
+        }
     }
 }
